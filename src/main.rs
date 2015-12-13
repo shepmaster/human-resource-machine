@@ -445,7 +445,7 @@ impl<'a> FromIterator<Token<'a>> for Program {
     }
 }
 
-#[derive(Debug, Copy, Clone)]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
 enum Tile {
     Number(i8), // what is the actual size here?
     Letter(char),
@@ -635,19 +635,30 @@ impl Machine {
     }
 }
 
-// two zero-term words; output first in alpha order
-fn level_36() -> (Input, Registers) {
+fn append_string(input: &mut Input, s: &str) {
+    input.extend(s.chars().map(Tile::Letter));
+}
+
+fn append_zero_terminated_string(input: &mut Input, s: &str) {
+    append_string(input, s);
+    input.push(Tile::Number(0));
+}
+
+// Given two zero-terminated words, output the word that is first in
+// alphabetical order
+fn level_36() -> (Input, Registers, Output) {
     let mut input = Vec::new();
-    input.extend("aab".chars().map(Tile::Letter));
-    input.push(Tile::Number(0));
-    input.extend("aaa".chars().map(Tile::Letter));
-    input.push(Tile::Number(0));
+    append_zero_terminated_string(&mut input, "aab");
+    append_zero_terminated_string(&mut input, "aaa");
 
     let mut registers = BTreeMap::new();
     registers.insert(23, Tile::Number(0));
     registers.insert(24, Tile::Number(10));
 
-    (input, registers)
+    let mut output = Vec::new();
+    append_string(&mut output, "aaa");
+
+    (input, registers, output)
 }
 
 fn main() {
@@ -661,14 +672,19 @@ fn main() {
 
     let p: Program = t.collect();
 
-    let (input, registers) = level_36();
+    let (input, registers, output) = level_36();
     let mut m = Machine::new(p, input, registers);
 
     match m.run() {
         Ok(..) => {
             println!("Program completed");
-            println!("Output:");
-            println!("{:?}", m.output);
+            if m.output == output {
+                println!("Output matched!");
+            } else {
+                println!("Output did not match");
+                println!("Expected: {:?}", output);
+                println!("Got:      {:?}", m.output);
+            }
         },
         Err(e) => {
             println!("Program failed");
