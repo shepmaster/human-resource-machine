@@ -42,12 +42,14 @@ type ZPM<'a> = ParseMaster<StringPoint<'a>, Error>;
 type ZPR<'a, T> = Progress<StringPoint<'a>, T, Error>;
 
 struct Thing<'a> {
+    s: &'a str,
     point: StringPoint<'a>,
 }
 
 impl<'a> Thing<'a> {
     fn new(s: &str) -> Thing {
         Thing {
+            s: s,
             point: StringPoint::new(s),
         }
     }
@@ -310,8 +312,24 @@ impl<'a> Iterator for Thing<'a> {
                 Some(tok)
             },
             Progress { status: Status::Failure(x), point } => {
-                println!("Actually an error: {:?}, {:?}", x, point);
-                None
+                let s = self.s;
+
+                let upto = &s[..point.offset];
+                let leading_nl = upto.rfind("\n").unwrap_or(0);
+                let after = &s[point.offset..];
+                let trailing_nl = after.find("\n").unwrap_or(after.len()) + point.offset;
+
+                let line = &s[leading_nl..trailing_nl].trim();
+                let inner_offset = point.offset - leading_nl - 1;
+
+                println!("ERROR");
+                println!("{}", line);
+                for _ in 0..inner_offset { print!(" ") }
+                println!("^");
+
+                panic!("Actually an error: {:?}, {:?}", x, point);
+                // TODO: proper error reporting
+                //None
             }
         }
     }
