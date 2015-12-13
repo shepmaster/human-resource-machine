@@ -8,8 +8,8 @@ use std::fs::File;
 use std::io::prelude::*;
 use std::collections::BTreeMap;
 
-use parser::{Thing};
-use machine::{Input, Output, Registers, Tile, Program, Machine};
+use parser::Parser;
+use machine::{Input, Output, Registers, Tile, Machine};
 
 fn append_string(input: &mut Input, s: &str) {
     input.extend(s.chars().map(Tile::Letter));
@@ -37,6 +37,22 @@ fn level_36() -> (Input, Registers, Output) {
     (input, registers, output)
 }
 
+fn report_parsing_error(s: &str, offset: usize, errors: &[parser::Error]) {
+    let upto = &s[..offset];
+    let leading_nl = upto.rfind("\n").map(|x| x + 1).unwrap_or(0);
+    let after = &s[offset..];
+    let trailing_nl = after.find("\n").map(|x| x - 1).unwrap_or(after.len()) + offset;
+
+    let line = &s[leading_nl..trailing_nl];
+    let inner_offset = offset - leading_nl;
+
+    println!("Error occured while parsing:");
+    println!("{}", line);
+    for _ in 0..inner_offset { print!(" ") }
+    println!("^");
+    println!("{:?}", errors);
+}
+
 fn main() {
     let fname = ::std::env::args().nth(1).expect("filename");
     let mut f = File::open(fname).expect("File?");
@@ -44,9 +60,15 @@ fn main() {
     let mut s = String::new();
     f.read_to_string(&mut s).expect("read");
 
-    let t = Thing::new(&s);
+    let t = Parser::new(&s);
 
-    let p: Program = t.collect();
+    let p = match t.collect() {
+        Ok(p) => p,
+        Err((offset, errors)) => {
+            report_parsing_error(&s, offset, &errors);
+            return;
+        },
+    };
 
     let (input, registers, output) = level_36();
     let mut m = Machine::new(p, input, registers);

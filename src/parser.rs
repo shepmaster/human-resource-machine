@@ -39,15 +39,13 @@ impl Recoverable for Error {
 type ZPM<'a> = ParseMaster<StringPoint<'a>, Error>;
 type ZPR<'a, T> = Progress<StringPoint<'a>, T, Error>;
 
-pub struct Thing<'a> {
-    s: &'a str,
+pub struct Parser<'a> {
     point: StringPoint<'a>,
 }
 
-impl<'a> Thing<'a> {
-    pub fn new(s: &str) -> Thing {
-        Thing {
-            s: s,
+impl<'a> Parser<'a> {
+    pub fn new(s: &str) -> Parser {
+        Parser {
             point: StringPoint::new(s),
         }
     }
@@ -307,8 +305,8 @@ fn string_point_consume_while<'a, F>(pt: StringPoint<'a>, predicate: F) -> Progr
     pt.consume_to(end)
 }
 
-impl<'a> Iterator for Thing<'a> {
-    type Item = Token<'a>;
+impl<'a> Iterator for Parser<'a> {
+    type Item = Result<Token<'a>, (usize, Vec<Error>)>;
 
     fn next(&mut self) -> Option<Self::Item> {
         let pt = self.point;
@@ -340,27 +338,10 @@ impl<'a> Iterator for Thing<'a> {
         match pm.finish(tmp) {
             Progress { status: Status::Success(tok), point } => {
                 self.point = point;
-                Some(tok)
+                Some(Ok(tok))
             },
-            Progress { status: Status::Failure(x), point } => {
-                let s = self.s;
-
-                let upto = &s[..point.offset];
-                let leading_nl = upto.rfind("\n").unwrap_or(0);
-                let after = &s[point.offset..];
-                let trailing_nl = after.find("\n").unwrap_or(after.len()) + point.offset;
-
-                let line = &s[leading_nl..trailing_nl].trim();
-                let inner_offset = point.offset - leading_nl - 1;
-
-                println!("ERROR");
-                println!("{}", line);
-                for _ in 0..inner_offset { print!(" ") }
-                println!("^");
-
-                panic!("Actually an error: {:?}, {:?}", x, point);
-                // TODO: proper error reporting
-                //None
+            Progress { status: Status::Failure(e), point } => {
+                Some(Err((point.offset, e)))
             }
         }
     }
