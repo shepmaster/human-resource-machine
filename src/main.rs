@@ -78,7 +78,6 @@ enum Token<'a> {
     Jump(Label<'a>),
     JumpIfZero(Label<'a>),
     JumpIfNegative(Label<'a>),
-    // negative?
     Comment(CommentId<'a>),
     CommentDefinition(CommentId<'a>, CommentData<'a>),
     Whitespace(&'a str),
@@ -163,12 +162,7 @@ fn parse_register_indirect<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a,
 }
 
 fn parse_register_value<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, u8> {
-    let end = match pt.s.char_indices().skip_while(|&(_, c)| c.is_digit(10)).next() {
-        Some((pos, _)) if pos == 0 => None,
-        Some((pos, _)) => Some(pos),
-        None => Some(pt.s.len()),
-    };
-    pt.consume_to(end)
+    string_point_consume_while(pt, |c| c.is_digit(10))
         .map(|v| v.parse().unwrap()) // unrecoverable error
         .map_err(|_| Error::ExpectedRegisterValue)
 }
@@ -184,13 +178,7 @@ fn parse_label_definition<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, 
 }
 
 fn parse_label_value<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
-    let end = match pt.s.char_indices().skip_while(|&(_, c)| c >= 'a' && c <= 'z').next() {
-        Some((pos, _)) if pos == 0 => None,
-        Some((pos, _)) => Some(pos),
-        None => Some(pt.s.len()),
-    };
-
-    pt.consume_to(end)
+    string_point_consume_while(pt, |c| c >= 'a' && c <= 'z')
         .map_err(|_| Error::ExpectedLabelValue)
 }
 
@@ -259,38 +247,32 @@ fn parse_comment_definition<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a
 }
 
 fn parse_comment_id<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
-// Duplicated logic - check and pull to peresil?
-    let end = match pt.s.char_indices().skip_while(|&(_, c)| c.is_digit(10)).next() {
-        Some((pos, _)) if pos == 0 => None,
-        Some((pos, _)) => Some(pos),
-        None => Some(pt.s.len()),
-    };
-    pt.consume_to(end)
+    string_point_consume_while(pt, |c| c.is_digit(10))
         .map_err(|_| Error::ExpectedCommentId)
 }
 
 fn parse_comment_data<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
-// Duplicated logic - check and pull to peresil?
-    let end = match pt.s.char_indices().skip_while(|&(_, c)| c != ';').next() {
-        Some((pos, _)) if pos == 0 => None,
-        Some((pos, _)) => Some(pos),
-        None => Some(pt.s.len()),
-    };
-    pt.consume_to(end)
+    string_point_consume_while(pt, |c| c != ';')
         .map_err(|_| Error::ExpectedCommentDefinitionData)
 }
 
-
 fn parse_whitespace<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    // Duplicated logic - check and pull to peresil?
-    let end = match pt.s.char_indices().skip_while(|&(_, c)| c.is_whitespace()).next() {
+    string_point_consume_while(pt, char::is_whitespace)
+        .map(Token::Whitespace)
+        .map_err(|_| Error::ExpectedWhiteSpace)
+}
+
+// Duplicated logic - check and pull to peresil?
+fn string_point_consume_while<'a, F>(pt: StringPoint<'a>, predicate: F) -> Progress<StringPoint<'a>, &str, ()>
+    where F: Fn(char) -> bool
+{
+    let end = match pt.s.char_indices().skip_while(|&(_, c)| predicate(c)).next() {
         Some((pos, _)) if pos == 0 => None,
         Some((pos, _)) => Some(pos),
         None => Some(pt.s.len()),
     };
+
     pt.consume_to(end)
-        .map(Token::Whitespace)
-        .map_err(|_| Error::ExpectedWhiteSpace)
 }
 
 impl<'a> Iterator for Thing<'a> {
