@@ -114,7 +114,7 @@ fn parse_bump_up<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>
 }
 
 fn parse_bump_down<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    parse_single_register_instruction(pm, pt, "BUMPDOWN", Token::BumpDown, Error::ExpectedBumpDown)
+    parse_single_register_instruction(pm, pt, "BUMPDN", Token::BumpDown, Error::ExpectedBumpDown)
 }
 
 fn parse_add<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
