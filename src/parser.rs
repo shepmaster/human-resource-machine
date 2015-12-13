@@ -39,6 +39,7 @@ impl Recoverable for Error {
 type ZPM<'a> = ParseMaster<StringPoint<'a>, Error>;
 type ZPR<'a, T> = Progress<StringPoint<'a>, T, Error>;
 
+#[derive(Debug, Copy, Clone)]
 pub struct Parser<'a> {
     point: StringPoint<'a>,
 }

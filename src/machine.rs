@@ -104,6 +104,7 @@ pub type Input = Vec<Tile>;
 pub type Output = Vec<Tile>;
 pub type Registers = BTreeMap<u8, Tile>;
 
+#[derive(Debug, Clone)]
 pub struct Machine {
     program: Program,
     input: Input,
