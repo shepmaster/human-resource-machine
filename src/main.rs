@@ -8,7 +8,6 @@ use peresil::{ParseMaster, StringPoint, Progress, Status, Recoverable};
 
 #[derive(Debug, Copy, Clone)]
 enum Error {
-    Lazy,
     ExpectedHeader,
     ExpectedInbox,
     ExpectedOutbox,
@@ -43,14 +42,12 @@ type ZPM<'a> = ParseMaster<StringPoint<'a>, Error>;
 type ZPR<'a, T> = Progress<StringPoint<'a>, T, Error>;
 
 struct Thing<'a> {
-    s: &'a str,
     point: StringPoint<'a>,
 }
 
 impl<'a> Thing<'a> {
     fn new(s: &str) -> Thing {
         Thing {
-            s: s,
             point: StringPoint::new(s),
         }
     }
@@ -87,23 +84,19 @@ enum Token<'a> {
     Whitespace(&'a str),
 }
 
-enum State {
-    Initial
-}
-
-fn parse_header<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
+fn parse_header<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
     pt.consume_literal("-- HUMAN RESOURCE MACHINE PROGRAM --")
         .map(|_| Token::Header)
         .map_err(|_| Error::ExpectedHeader)
 }
 
-fn parse_inbox<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
+fn parse_inbox<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
     pt.consume_literal("INBOX")
         .map(|_| Token::Inbox)
         .map_err(|_| Error::ExpectedInbox)
 }
 
-fn parse_outbox<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
+fn parse_outbox<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
     pt.consume_literal("OUTBOX")
         .map(|_| Token::Outbox)
         .map_err(|_| Error::ExpectedOutbox)
@@ -207,8 +200,8 @@ fn parse_register_indirect<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a,
     Progress::success(pt, Register::Indirect(reg))
 }
 
-fn parse_register_value<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, u8> {
-    let end = match pt.s.char_indices().skip_while(|&(i, c)| c.is_digit(10)).next() {
+fn parse_register_value<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, u8> {
+    let end = match pt.s.char_indices().skip_while(|&(_, c)| c.is_digit(10)).next() {
         Some((pos, _)) if pos == 0 => None,
         Some((pos, _)) => Some(pos),
         None => Some(pt.s.len()),
@@ -228,8 +221,8 @@ fn parse_label_definition<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, 
     Progress::success(pt, Token::LabelDefinition(val))
 }
 
-fn parse_label_value<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
-    let end = match pt.s.char_indices().skip_while(|&(i, c)| c >= 'a' && c <= 'z').next() {
+fn parse_label_value<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
+    let end = match pt.s.char_indices().skip_while(|&(_, c)| c >= 'a' && c <= 'z').next() {
         Some((pos, _)) if pos == 0 => None,
         Some((pos, _)) => Some(pos),
         None => Some(pt.s.len()),
@@ -313,9 +306,9 @@ fn parse_comment_definition<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a
     Progress::success(pt, Token::CommentDefinition(id, data))
 }
 
-fn parse_comment_id<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
+fn parse_comment_id<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
 // Duplicated logic - check and pull to peresil?
-    let end = match pt.s.char_indices().skip_while(|&(i, c)| c.is_digit(10)).next() {
+    let end = match pt.s.char_indices().skip_while(|&(_, c)| c.is_digit(10)).next() {
         Some((pos, _)) if pos == 0 => None,
         Some((pos, _)) => Some(pos),
         None => Some(pt.s.len()),
@@ -324,9 +317,9 @@ fn parse_comment_id<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a st
         .map_err(|_| Error::ExpectedCommentId)
 }
 
-fn parse_comment_data<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
+fn parse_comment_data<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
 // Duplicated logic - check and pull to peresil?
-    let end = match pt.s.char_indices().skip_while(|&(i, c)| c != ';').next() {
+    let end = match pt.s.char_indices().skip_while(|&(_, c)| c != ';').next() {
         Some((pos, _)) if pos == 0 => None,
         Some((pos, _)) => Some(pos),
         None => Some(pt.s.len()),
@@ -336,9 +329,9 @@ fn parse_comment_data<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a 
 }
 
 
-fn parse_whitespace<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
+fn parse_whitespace<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
     // Duplicated logic - check and pull to peresil?
-    let end = match pt.s.char_indices().skip_while(|&(i, c)| c.is_whitespace()).next() {
+    let end = match pt.s.char_indices().skip_while(|&(_, c)| c.is_whitespace()).next() {
         Some((pos, _)) if pos == 0 => None,
         Some((pos, _)) => Some(pos),
         None => Some(pt.s.len()),
@@ -396,7 +389,7 @@ fn main() {
     let mut s = String::new();
     f.read_to_string(&mut s).expect("read");
 
-    let mut t = Thing::new(&s);
+    let t = Thing::new(&s);
 
     for t in t {
         if let Token::Whitespace(..) = t { continue }
