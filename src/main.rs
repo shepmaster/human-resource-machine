@@ -408,17 +408,21 @@ impl StepError {
     }
 }
 
+type Input = Vec<Tile>;
+type Output = Vec<Tile>;
+type Registers = BTreeMap<u8, Tile>;
+
 struct Machine {
     program: Program,
-    input: Vec<Tile>,
-    output: Vec<Tile>,
+    input: Input,
+    output: Output,
     pc: usize,
     accumulator: Option<Tile>,
-    registers: BTreeMap<u8, Tile>,
+    registers: Registers,
 }
 
 impl Machine {
-    fn new(program: Program, mut input: Vec<Tile>) -> Machine {
+    fn new(program: Program, mut input: Input, registers: Registers) -> Machine {
         // We want to pop off the front, so flip it around for efficiency.
         input.reverse();
 
@@ -428,12 +432,8 @@ impl Machine {
             output: Vec::new(),
             pc: 0,
             accumulator: None,
-            registers: BTreeMap::new(),
+            registers: registers,
         }
-    }
-
-    fn set_register(&mut self, idx: u8, val: Tile) {
-        self.registers.insert(idx, val);
     }
 
     fn deref_target(&self, r: Register) -> Result<u8, StepError> {
@@ -451,9 +451,9 @@ impl Machine {
     fn step(&mut self) -> Result<(), StepError> {
         use Instruction::*;
 
-        println!("PC: {}", self.pc);
-        println!("Instr: {:?}", self.program.0[self.pc]);
-        println!("Acc: {:?}", self.accumulator);
+        // println!("PC: {}", self.pc);
+        // println!("Instr: {:?}", self.program.0[self.pc]);
+        // println!("Acc: {:?}", self.accumulator);
 
         match self.program.0[self.pc] {
             Inbox => {
@@ -581,6 +581,19 @@ impl Machine {
 }
 
 // two zero-term words; output first in alpha order
+fn level_36() -> (Input, Registers) {
+    let mut input = Vec::new();
+    input.extend("aab".chars().map(Tile::Letter));
+    input.push(Tile::Number(0));
+    input.extend("aaa".chars().map(Tile::Letter));
+    input.push(Tile::Number(0));
+
+    let mut registers = BTreeMap::new();
+    registers.insert(23, Tile::Number(0));
+    registers.insert(24, Tile::Number(10));
+
+    (input, registers)
+}
 
 fn main() {
     let mut f = File::open("36-alphabetizer-both.txt").expect("File?");
@@ -592,15 +605,18 @@ fn main() {
 
     let p: Program = t.collect();
 
-    let mut input = Vec::new();
-    input.extend("aab".chars().map(Tile::Letter));
-    input.push(Tile::Number(0));
-    input.extend("aaa".chars().map(Tile::Letter));
-    input.push(Tile::Number(0));
+    let (input, registers) = level_36();
+    let mut m = Machine::new(p, input, registers);
 
-    let mut m = Machine::new(p, input);
-    m.set_register(23, Tile::Number(0));
-    m.set_register(24, Tile::Number(10));
-
-    println!("{:?}", m.run());
+    match m.run() {
+        Ok(..) => {
+            println!("Program completed");
+            println!("Output:");
+            println!("{:?}", m.output);
+        },
+        Err(e) => {
+            println!("Program failed");
+            println!("{:?}", e);
+        }
+    }
 }
