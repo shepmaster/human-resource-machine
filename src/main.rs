@@ -31,6 +31,10 @@ enum Error {
     ExpectedCommentDefinition,
     ExpectedCommentDefinitionData,
     ExpectedCommentDefinitionEnd,
+    ExpectedRegisterLabelDefinition,
+    ExpectedRegisterLabelId,
+    ExpectedRegisterLabelDefinitionData,
+    ExpectedRegisterLabelDefinitionEnd,
     ExpectedColon,
 }
 
@@ -258,6 +262,38 @@ fn parse_comment_data<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a s
         .map_err(|_| Error::ExpectedCommentDefinitionData)
 }
 
+fn parse_register_label_definition<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
+    let (pt, _) = try_parse!(
+        pt.consume_literal("DEFINE LABEL")
+            .map_err(|_| Error::ExpectedRegisterLabelDefinition)
+    );
+
+    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
+
+    let (pt, id) = try_parse!{parse_register_label_id(pm, pt)};
+
+    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
+
+    let (pt, data) = try_parse!{parse_register_label_data(pm, pt)};
+
+    let (pt, _) = try_parse!{
+        pt.consume_literal(";")
+            .map_err(|_| Error::ExpectedRegisterLabelDefinitionEnd)
+    };
+
+    Progress::success(pt, Token::CommentDefinition(id, data))
+}
+
+fn parse_register_label_id<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
+    string_point_consume_while(pt, |c| c.is_digit(10))
+        .map_err(|_| Error::ExpectedRegisterLabelId)
+}
+
+fn parse_register_label_data<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a str> {
+    string_point_consume_while(pt, |c| c != ';')
+        .map_err(|_| Error::ExpectedRegisterLabelDefinitionData)
+}
+
 fn parse_whitespace<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
     string_point_consume_while(pt, char::is_whitespace)
         .map(Token::Whitespace)
@@ -303,6 +339,7 @@ impl<'a> Iterator for Thing<'a> {
             .one(|pm| parse_jump_if_negative(pm, pt))
             .one(|pm| parse_comment(pm, pt))
             .one(|pm| parse_comment_definition(pm, pt))
+            .one(|pm| parse_register_label_definition(pm, pt))
             .one(|pm| parse_whitespace(pm, pt))
             .finish();
 
