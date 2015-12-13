@@ -317,6 +317,253 @@ impl<'a> Iterator for Thing<'a> {
     }
 }
 
+type AbsoluteIndex = usize;
+
+#[derive(Debug, Copy, Clone)]
+enum Instruction {
+    Inbox,
+    Outbox,
+    CopyFrom(Register),
+    CopyTo(Register),
+    BumpUp(Register),
+    BumpDown(Register),
+    Add(Register),
+    Sub(Register),
+    Jump(AbsoluteIndex),
+    JumpIfZero(AbsoluteIndex),
+    JumpIfNegative(AbsoluteIndex),
+    NoOp,
+}
+
+#[derive(Debug, Clone)]
+struct Program(Vec<Instruction>);
+
+use std::iter::FromIterator;
+use std::collections::BTreeMap;
+
+impl<'a> FromIterator<Token<'a>> for Program {
+    fn from_iter<T>(iterator: T) -> Self
+        where T: IntoIterator<Item = Token<'a>>
+    {
+        // Remove values that don't change the behavior
+        let without_junk: Vec<_> = iterator.into_iter().filter(|t| match *t {
+            Token::Header |
+            Token::Comment(..) |
+            Token::CommentDefinition(..) |
+            Token::Whitespace(..) => false,
+            _ => true,
+        }).collect();
+
+        // Find all the indexes of the labels
+        let label_mapping = {
+            let mut map = BTreeMap::new();
+
+            for (i, t) in without_junk.iter().enumerate() {
+                if let Token::LabelDefinition(id) = *t {
+                    map.insert(id, i);
+                }
+            }
+
+            map
+        };
+
+        let unmap = |id| *label_mapping.get(id).expect("Label is not defined");
+
+        // Make the instructions, resolving jump locations
+        let i = without_junk.into_iter().map(|t| match t {
+            Token::Inbox => Instruction::Inbox,
+            Token::Outbox => Instruction::Outbox,
+            Token::CopyFrom(r) => Instruction::CopyFrom(r),
+            Token::CopyTo(r) => Instruction::CopyTo(r),
+            Token::BumpUp(r) => Instruction::BumpUp(r),
+            Token::BumpDown(r) => Instruction::BumpDown(r),
+            Token::Add(r) => Instruction::Add(r),
+            Token::Sub(r) => Instruction::Sub(r),
+            Token::LabelDefinition(..) => Instruction::NoOp,
+            Token::Jump(id) => Instruction::Jump(unmap(id)),
+            Token::JumpIfZero(id) => Instruction::JumpIfZero(unmap(id)),
+            Token::JumpIfNegative(id) => Instruction::JumpIfNegative(unmap(id)),
+            _ => unreachable!(),
+        });
+
+        Program(i.collect())
+    }
+}
+
+#[derive(Debug, Copy, Clone)]
+enum Tile {
+    Number(i8), // what is the actual size here?
+    Letter(char),
+}
+
+struct Machine {
+    program: Program,
+    input: Vec<Tile>,
+    output: Vec<Tile>,
+    pc: usize,
+    accumulator: Option<Tile>,
+    registers: BTreeMap<u8, Tile>,
+}
+
+impl Machine {
+    fn new(program: Program, mut input: Vec<Tile>) -> Machine {
+        // We want to pop off the front, so flip it around for efficiency.
+        input.reverse();
+
+        Machine {
+            program: program,
+            input: input,
+            output: Vec::new(),
+            pc: 0,
+            accumulator: None,
+            registers: BTreeMap::new(),
+        }
+    }
+
+    fn set_register(&mut self, idx: u8, val: Tile) {
+        self.registers.insert(idx, val);
+    }
+
+    fn deref_target(&self, r: Register) -> u8 {
+        match r {
+            Register::Direct(r) => r,
+            Register::Indirect(r) => match self.registers.get(&r) {
+                None => panic!("indirect through nil!"),
+                Some(&Tile::Number(v)) if v < 0 => panic!("indirect to negative!"),
+                Some(&Tile::Number(v)) => v as u8,
+                Some(&Tile::Letter(..)) => panic!("indirect through letter"),
+            },
+        }
+    }
+
+    fn step(&mut self) {
+        use Instruction::*;
+
+        println!("PC: {}", self.pc);
+        println!("Instr: {:?}", self.program.0[self.pc]);
+        println!("Acc: {:?}", self.accumulator);
+
+        match self.program.0[self.pc] {
+            Inbox => {
+                match self.input.pop() {
+                    Some(v) => self.accumulator = Some(v),
+                    None => {
+                        println!("{:?}", self.output);
+                        println!("{:?}", self.registers);
+                        panic!("End of input, exit cleanly");
+                    },
+                }
+            },
+            Outbox => {
+                match self.accumulator {
+                    Some(v) => self.output.push(v),
+                    None => panic!("Can't output with nothing!"),
+                }
+            },
+            CopyFrom(r) => {
+                let r = self.deref_target(r);
+                let v = self.registers.get(&r).expect("copy from nil");
+                self.accumulator = Some(*v);
+            },
+            CopyTo(r) => {
+                match self.accumulator {
+                    Some(v) => {
+                        let r = self.deref_target(r);
+                        self.registers.insert(r, v);
+                    },
+                    None => panic!("nothing to copy to the tile"),
+                }
+            },
+            BumpUp(r) => {
+                let r = self.deref_target(r);
+                let v = match self.registers.get_mut(&r) {
+                    None => panic!("can't bump nil"),
+                    Some(&mut Tile::Number(ref mut v)) => {
+                        *v = *v + 1;
+                        *v
+                    },
+                    Some(&mut Tile::Letter(..)) => panic!("can't bump a letter")
+                };
+                self.accumulator = Some(Tile::Number(v))
+            },
+            BumpDown(r) => {
+                let r = self.deref_target(r);
+                let v = match self.registers.get_mut(&r) {
+                    None => panic!("can't bump nil"),
+                    Some(&mut Tile::Number(ref mut v)) => {
+                        *v = *v - 1;
+                        *v
+                    },
+                    Some(&mut Tile::Letter(..)) => panic!("can't bump a letter")
+                };
+                self.accumulator = Some(Tile::Number(v))
+            },
+            Add(r) => {
+                let r = self.deref_target(r);
+                let v = match (self.accumulator, self.registers.get(&r)) {
+                    (None, _) => panic!("Cannot add with nil in hand"),
+                    (_, None) => panic!("Cannot add to nil"),
+                    (Some(Tile::Number(a)), Some(&Tile::Number(v))) => a + v,
+                    _ => panic!("Cannot add with letters"),
+                };
+                self.accumulator = Some(Tile::Number(v));
+            },
+            Sub(r) => {
+                let r = self.deref_target(r);
+                let v = match (self.accumulator, self.registers.get(&r)) {
+                    (None, _) => panic!("Cannot sub with nil in hand"),
+                    (_, None) => panic!("can't sub to nil"),
+                    (Some(Tile::Number(a)), Some(&Tile::Number(v))) => a - v,
+                    (Some(Tile::Letter(a)), Some(&Tile::Letter(v))) => a as i8 - v as i8,
+                    _ => panic!("Cannot sub a letter and number"),
+                };
+                self.accumulator = Some(Tile::Number(v))
+            },
+            Jump(i) => {
+                self.pc = i;
+                return;
+            },
+            JumpIfZero(i) => {
+                match self.accumulator {
+                    None => panic!("cannot jump zero with nil in hand"),
+                    Some(v) => match v {
+                        Tile::Number(v) if v == 0 => {
+                            self.pc = i;
+                            return;
+                        }
+                        Tile::Number(..) |
+                        Tile::Letter(..) => {}, // noop
+                    }
+                }
+            },
+            JumpIfNegative(i) => {
+                match self.accumulator {
+                    None => panic!("cannot jump neg with nil in hand"),
+                    Some(v) => match v {
+                        Tile::Number(v) if v < 0 => {
+                            self.pc = i;
+                            return;
+                        }
+                        Tile::Number(..) |
+                        Tile::Letter(..) => {}, // noop
+                    }
+                }
+            },
+            NoOp => {},
+        }
+
+        self.pc += 1;
+
+        if self.pc >= self.program.0.len() {
+            println!("{:?}", self.output);
+            println!("{:?}", self.registers);
+            panic!("end of input, exit cleanly")
+        }
+    }
+}
+
+// two zero-term words; output first in alpha order
+
 fn main() {
     let mut f = File::open("36-alphabetizer-both.txt").expect("File?");
 
@@ -325,8 +572,19 @@ fn main() {
 
     let t = Thing::new(&s);
 
-    for t in t {
-        if let Token::Whitespace(..) = t { continue }
-        println!("{:?}", t);
+    let p: Program = t.collect();
+
+    let mut input = Vec::new();
+    input.extend("aab".chars().map(Tile::Letter));
+    input.push(Tile::Number(0));
+    input.extend("aaa".chars().map(Tile::Letter));
+    input.push(Tile::Number(0));
+
+    let mut m = Machine::new(p, input);
+    m.set_register(23, Tile::Number(0));
+    m.set_register(24, Tile::Number(10));
+
+    loop {
+        m.step();
     }
 }
