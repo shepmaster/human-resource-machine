@@ -79,16 +79,25 @@ pub enum Tile {
     Letter(char),
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Copy, Clone)]
 pub enum StepError {
     EndOfProgram,
-    Other(String),
-}
-
-impl StepError {
-    fn e(s: &str) -> StepError {
-        StepError::Other(s.into())
-    }
+    IndirectThroughNil,
+    IndirectThroughNegative,
+    IndirectThroughLetter,
+    OutputNil,
+    CopyFromNil,
+    CopyToNil,
+    BumpNil,
+    BumpLetter,
+    AddWithNil,
+    AddToNil,
+    AddWithLetter,
+    SubFromNil,
+    SubWithNil,
+    SubCrossTypes,
+    JumpZeroNil,
+    JumpNegativeNil,
 }
 
 pub type Input = Vec<Tile>;
@@ -123,10 +132,10 @@ impl Machine {
         match r {
             Register::Direct(r) => Ok(r),
             Register::Indirect(r) => match self.registers.get(&r) {
-                None => Err(StepError::e("indirect through nil!")),
-                Some(&Tile::Number(v)) if v < 0 => Err(StepError::e("indirect to negative!")),
+                None => Err(StepError::IndirectThroughNil),
+                Some(&Tile::Number(v)) if v < 0 => Err(StepError::IndirectThroughNegative),
                 Some(&Tile::Number(v)) => Ok(v as u8),
-                Some(&Tile::Letter(..)) => Err(StepError::e("indirect through letter")),
+                Some(&Tile::Letter(..)) => Err(StepError::IndirectThroughLetter),
             },
         }
     }
@@ -150,12 +159,12 @@ impl Machine {
             Outbox => {
                 match self.accumulator {
                     Some(v) => self.output.push(v),
-                    None => return Err(StepError::e("Can't output with nothing!")),
+                    None => return Err(StepError::OutputNil),
                 }
             },
             CopyFrom(r) => {
                 let r = try!(self.deref_target(r));
-                let v = try!(self.registers.get(&r).ok_or(StepError::e("copy from nil")));
+                let v = try!(self.registers.get(&r).ok_or(StepError::CopyFromNil));
                 self.accumulator = Some(*v);
             },
             CopyTo(r) => {
@@ -164,51 +173,51 @@ impl Machine {
                         let r = try!(self.deref_target(r));
                         self.registers.insert(r, v);
                     },
-                    None => return Err(StepError::e("nothing to copy to the tile")),
+                    None => return Err(StepError::CopyToNil),
                 }
             },
             BumpUp(r) => {
                 let r = try!(self.deref_target(r));
                 let v = match self.registers.get_mut(&r) {
-                    None => return Err(StepError::e("can't bump nil")),
+                    None => return Err(StepError::BumpNil),
                     Some(&mut Tile::Number(ref mut v)) => {
                         *v = *v + 1;
                         *v
                     },
-                    Some(&mut Tile::Letter(..)) => return Err(StepError::e("can't bump a letter"))
+                    Some(&mut Tile::Letter(..)) => return Err(StepError::BumpLetter)
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
             BumpDown(r) => {
                 let r = try!(self.deref_target(r));
                 let v = match self.registers.get_mut(&r) {
-                    None => return Err(StepError::e("can't bump nil")),
+                    None => return Err(StepError::BumpNil),
                     Some(&mut Tile::Number(ref mut v)) => {
                         *v = *v - 1;
                         *v
                     },
-                    Some(&mut Tile::Letter(..)) => return Err(StepError::e("can't bump a letter"))
+                    Some(&mut Tile::Letter(..)) => return Err(StepError::BumpLetter)
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
             Add(r) => {
                 let r = try!(self.deref_target(r));
                 let v = match (self.accumulator, self.registers.get(&r)) {
-                    (None, _) => return Err(StepError::e("Cannot add with nil in hand")),
-                    (_, None) => return Err(StepError::e("Cannot add to nil")),
+                    (None, _) => return Err(StepError::AddToNil),
+                    (_, None) => return Err(StepError::AddWithNil),
                     (Some(Tile::Number(a)), Some(&Tile::Number(v))) => a + v,
-                    _ => return Err(StepError::e("Cannot add with letters")),
+                    _ => return Err(StepError::AddWithLetter),
                 };
                 self.accumulator = Some(Tile::Number(v));
             },
             Sub(r) => {
                 let r = try!(self.deref_target(r));
                 let v = match (self.accumulator, self.registers.get(&r)) {
-                    (None, _) => return Err(StepError::e("Cannot sub with nil in hand")),
-                    (_, None) => return Err(StepError::e("can't sub to nil")),
+                    (None, _) => return Err(StepError::SubFromNil),
+                    (_, None) => return Err(StepError::SubWithNil),
                     (Some(Tile::Number(a)), Some(&Tile::Number(v))) => a - v,
                     (Some(Tile::Letter(a)), Some(&Tile::Letter(v))) => a as i8 - v as i8,
-                    _ => return Err(StepError::e("Cannot sub a letter and number")),
+                    _ => return Err(StepError::SubCrossTypes),
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
@@ -218,7 +227,7 @@ impl Machine {
             },
             JumpIfZero(i) => {
                 match self.accumulator {
-                    None => return Err(StepError::e("cannot jump zero with nil in hand")),
+                    None => return Err(StepError::JumpZeroNil),
                     Some(v) => match v {
                         Tile::Number(v) if v == 0 => {
                             self.pc = i;
@@ -231,7 +240,7 @@ impl Machine {
             },
             JumpIfNegative(i) => {
                 match self.accumulator {
-                    None => return Err(StepError::e("cannot jump neg with nil in hand")),
+                    None => return Err(StepError::JumpNegativeNil),
                     Some(v) => match v {
                         Tile::Number(v) if v < 0 => {
                             self.pc = i;
