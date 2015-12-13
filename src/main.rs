@@ -103,82 +103,44 @@ fn parse_outbox<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> 
 }
 
 fn parse_copy_from<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!{
-        pt.consume_literal("COPYFROM")
-            .map_err(|_| Error::ExpectedCopyFrom)
-    };
-
-    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
-    let (pt, reg) = try_parse!{parse_register(pm, pt)};
-
-    Progress::success(pt, Token::CopyFrom(reg))
+    parse_single_register_instruction(pm, pt, "COPYFROM", Token::CopyFrom, Error::ExpectedCopyFrom)
 }
 
 fn parse_copy_to<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!{
-        pt.consume_literal("COPYTO")
-            .map_err(|_| Error::ExpectedCopyTo)
-    };
-
-    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
-    let (pt, reg) = try_parse!{parse_register(pm, pt)};
-
-    Progress::success(pt, Token::CopyTo(reg))
+    parse_single_register_instruction(pm, pt, "COPYTO", Token::CopyTo, Error::ExpectedCopyTo)
 }
 
 fn parse_bump_up<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!{
-        pt.consume_literal("BUMPUP")
-            .map_err(|_| Error::ExpectedBumpUp)
-    };
-
-    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
-    let (pt, reg) = try_parse!{parse_register(pm, pt)};
-
-    Progress::success(pt, Token::BumpUp(reg))
+    parse_single_register_instruction(pm, pt, "BUMPUP", Token::BumpUp, Error::ExpectedBumpUp)
 }
 
-// Single register stuff is very repeated
 fn parse_bump_down<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!{
-        pt.consume_literal("BUMPDOWN")
-            .map_err(|_| Error::ExpectedBumpDown)
-    };
-
-    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
-    let (pt, reg) = try_parse!{parse_register(pm, pt)};
-
-    Progress::success(pt, Token::BumpDown(reg))
+    parse_single_register_instruction(pm, pt, "BUMPDOWN", Token::BumpDown, Error::ExpectedBumpDown)
 }
 
 fn parse_add<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!{
-        pt.consume_literal("ADD")
-            .map_err(|_| Error::ExpectedAdd)
-    };
-
-    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
-    let (pt, reg) = try_parse!{parse_register(pm, pt)};
-
-    Progress::success(pt, Token::Add(reg))
+    parse_single_register_instruction(pm, pt, "ADD", Token::Add, Error::ExpectedAdd)
 }
 
 fn parse_sub<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!{
-        pt.consume_literal("SUB")
-            .map_err(|_| Error::ExpectedSub)
-    };
+    parse_single_register_instruction(pm, pt, "SUB", Token::Sub, Error::ExpectedSub)
+}
 
+fn parse_single_register_instruction<'a, F>(
+    pm: &mut ZPM<'a>,
+    pt: StringPoint<'a>,
+    instruction_name: &str,
+    token_creator: F,
+    error_kind: Error
+)
+    -> ZPR<'a, Token<'a>>
+    where F: FnOnce(Register) -> Token<'a>
+{
+    let (pt, _) = try_parse!(pt.consume_literal(instruction_name).map_err(|_| error_kind));
     let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
     let (pt, reg) = try_parse!{parse_register(pm, pt)};
 
-    Progress::success(pt, Token::Sub(reg))
+    Progress::success(pt, token_creator(reg))
 }
 
 fn parse_register<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Register> {
@@ -233,42 +195,32 @@ fn parse_label_value<'a>(_: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, &'a st
 }
 
 fn parse_jump<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!(
-        pt.consume_literal("JUMP")
-            .map_err(|_| Error::ExpectedJump)
-    );
-
-    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
-    let (pt, lab) = try_parse!{parse_label_value(pm, pt)};
-
-    Progress::success(pt, Token::Jump(lab))
+    parse_jump_instruction(pm, pt, "JUMP", Token::Jump, Error::ExpectedJump)
 }
 
 fn parse_jump_if_zero<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!(
-        pt.consume_literal("JUMPZ")
-            .map_err(|_| Error::ExpectedJumpIfZero)
-    );
-
-    let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
-    let (pt, lab) = try_parse!{parse_label_value(pm, pt)};
-
-    Progress::success(pt, Token::JumpIfZero(lab))
+    parse_jump_instruction(pm, pt, "JUMPZ", Token::JumpIfZero, Error::ExpectedJumpIfZero)
 }
 
 fn parse_jump_if_negative<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
-    let (pt, _) = try_parse!(
-        pt.consume_literal("JUMPN")
-            .map_err(|_| Error::ExpectedJumpIfNegative)
-    );
+    parse_jump_instruction(pm, pt, "JUMPN", Token::JumpIfNegative, Error::ExpectedJumpIfNegative)
+}
 
+fn parse_jump_instruction<'a, F>(
+    pm: &mut ZPM<'a>,
+    pt: StringPoint<'a>,
+    instruction_name: &str,
+    token_creator: F,
+    error_kind: Error
+)
+    -> ZPR<'a, Token<'a>>
+    where F: FnOnce(Label<'a>) -> Token<'a>
+{
+    let (pt, _) = try_parse!(pt.consume_literal(instruction_name).map_err(|_| error_kind));
     let (pt, _) = try_parse!{parse_whitespace(pm, pt)};
-
     let (pt, lab) = try_parse!{parse_label_value(pm, pt)};
 
-    Progress::success(pt, Token::JumpIfNegative(lab))
+    Progress::success(pt, token_creator(lab))
 }
 
 fn parse_comment<'a>(pm: &mut ZPM<'a>, pt: StringPoint<'a>) -> ZPR<'a, Token<'a>> {
