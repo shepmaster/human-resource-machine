@@ -37,6 +37,20 @@ fn level_36() -> (Input, Registers, Output) {
     (input, registers, output)
 }
 
+// Given numbers, output the digits of the numbers
+fn level_38() -> (Input, Registers, Output) {
+    let input = [33, 123, 7, 111].iter().cloned().map(Tile::Number).collect();
+
+    let mut registers = BTreeMap::new();
+    registers.insert(9, Tile::Number(0));
+    registers.insert(10, Tile::Number(10));
+    registers.insert(11, Tile::Number(100));
+
+    let output = [3, 3, 1, 2, 3, 7, 1, 1, 1].iter().cloned().map(Tile::Number).collect();
+
+    (input, registers, output)
+}
+
 fn report_parsing_error(s: &str, offset: usize, errors: &[parser::Error]) {
     let upto = &s[..offset];
     let leading_nl = upto.rfind("\n").map(|x| x + 1).unwrap_or(0);
@@ -54,7 +68,8 @@ fn report_parsing_error(s: &str, offset: usize, errors: &[parser::Error]) {
 }
 
 fn main() {
-    let fname = ::std::env::args().nth(1).expect("filename");
+    let level = ::std::env::args().nth(1).expect("level").parse().expect("level number");
+    let fname = ::std::env::args().nth(2).expect("filename");
     let mut f = File::open(fname).expect("File?");
 
     let mut s = String::new();
@@ -70,7 +85,11 @@ fn main() {
         },
     };
 
-    let (input, registers, output) = level_36();
+    let (input, registers, output) = match level {
+        36 => level_36(),
+        38 => level_38(),
+        _ => panic!("Unknown level {}", level),
+    };
     let mut m = Machine::new(p, input, registers);
 
     match m.run() {
