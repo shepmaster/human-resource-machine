@@ -396,6 +396,18 @@ enum Tile {
     Letter(char),
 }
 
+#[derive(Debug, Clone)]
+enum StepError {
+    EndOfProgram,
+    Other(String),
+}
+
+impl StepError {
+    fn e(s: &str) -> StepError {
+        StepError::Other(s.into())
+    }
+}
+
 struct Machine {
     program: Program,
     input: Vec<Tile>,
@@ -424,19 +436,19 @@ impl Machine {
         self.registers.insert(idx, val);
     }
 
-    fn deref_target(&self, r: Register) -> u8 {
+    fn deref_target(&self, r: Register) -> Result<u8, StepError> {
         match r {
-            Register::Direct(r) => r,
+            Register::Direct(r) => Ok(r),
             Register::Indirect(r) => match self.registers.get(&r) {
-                None => panic!("indirect through nil!"),
-                Some(&Tile::Number(v)) if v < 0 => panic!("indirect to negative!"),
-                Some(&Tile::Number(v)) => v as u8,
-                Some(&Tile::Letter(..)) => panic!("indirect through letter"),
+                None => Err(StepError::e("indirect through nil!")),
+                Some(&Tile::Number(v)) if v < 0 => Err(StepError::e("indirect to negative!")),
+                Some(&Tile::Number(v)) => Ok(v as u8),
+                Some(&Tile::Letter(..)) => Err(StepError::e("indirect through letter")),
             },
         }
     }
 
-    fn step(&mut self) {
+    fn step(&mut self) -> Result<(), StepError> {
         use Instruction::*;
 
         println!("PC: {}", self.pc);
@@ -447,89 +459,85 @@ impl Machine {
             Inbox => {
                 match self.input.pop() {
                     Some(v) => self.accumulator = Some(v),
-                    None => {
-                        println!("{:?}", self.output);
-                        println!("{:?}", self.registers);
-                        panic!("End of input, exit cleanly");
-                    },
+                    None => return Err(StepError::EndOfProgram),
                 }
             },
             Outbox => {
                 match self.accumulator {
                     Some(v) => self.output.push(v),
-                    None => panic!("Can't output with nothing!"),
+                    None => return Err(StepError::e("Can't output with nothing!")),
                 }
             },
             CopyFrom(r) => {
-                let r = self.deref_target(r);
-                let v = self.registers.get(&r).expect("copy from nil");
+                let r = try!(self.deref_target(r));
+                let v = try!(self.registers.get(&r).ok_or(StepError::e("copy from nil")));
                 self.accumulator = Some(*v);
             },
             CopyTo(r) => {
                 match self.accumulator {
                     Some(v) => {
-                        let r = self.deref_target(r);
+                        let r = try!(self.deref_target(r));
                         self.registers.insert(r, v);
                     },
-                    None => panic!("nothing to copy to the tile"),
+                    None => return Err(StepError::e("nothing to copy to the tile")),
                 }
             },
             BumpUp(r) => {
-                let r = self.deref_target(r);
+                let r = try!(self.deref_target(r));
                 let v = match self.registers.get_mut(&r) {
-                    None => panic!("can't bump nil"),
+                    None => return Err(StepError::e("can't bump nil")),
                     Some(&mut Tile::Number(ref mut v)) => {
                         *v = *v + 1;
                         *v
                     },
-                    Some(&mut Tile::Letter(..)) => panic!("can't bump a letter")
+                    Some(&mut Tile::Letter(..)) => return Err(StepError::e("can't bump a letter"))
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
             BumpDown(r) => {
-                let r = self.deref_target(r);
+                let r = try!(self.deref_target(r));
                 let v = match self.registers.get_mut(&r) {
-                    None => panic!("can't bump nil"),
+                    None => return Err(StepError::e("can't bump nil")),
                     Some(&mut Tile::Number(ref mut v)) => {
                         *v = *v - 1;
                         *v
                     },
-                    Some(&mut Tile::Letter(..)) => panic!("can't bump a letter")
+                    Some(&mut Tile::Letter(..)) => return Err(StepError::e("can't bump a letter"))
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
             Add(r) => {
-                let r = self.deref_target(r);
+                let r = try!(self.deref_target(r));
                 let v = match (self.accumulator, self.registers.get(&r)) {
-                    (None, _) => panic!("Cannot add with nil in hand"),
-                    (_, None) => panic!("Cannot add to nil"),
+                    (None, _) => return Err(StepError::e("Cannot add with nil in hand")),
+                    (_, None) => return Err(StepError::e("Cannot add to nil")),
                     (Some(Tile::Number(a)), Some(&Tile::Number(v))) => a + v,
-                    _ => panic!("Cannot add with letters"),
+                    _ => return Err(StepError::e("Cannot add with letters")),
                 };
                 self.accumulator = Some(Tile::Number(v));
             },
             Sub(r) => {
-                let r = self.deref_target(r);
+                let r = try!(self.deref_target(r));
                 let v = match (self.accumulator, self.registers.get(&r)) {
-                    (None, _) => panic!("Cannot sub with nil in hand"),
-                    (_, None) => panic!("can't sub to nil"),
+                    (None, _) => return Err(StepError::e("Cannot sub with nil in hand")),
+                    (_, None) => return Err(StepError::e("can't sub to nil")),
                     (Some(Tile::Number(a)), Some(&Tile::Number(v))) => a - v,
                     (Some(Tile::Letter(a)), Some(&Tile::Letter(v))) => a as i8 - v as i8,
-                    _ => panic!("Cannot sub a letter and number"),
+                    _ => return Err(StepError::e("Cannot sub a letter and number")),
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
             Jump(i) => {
                 self.pc = i;
-                return;
+                return Ok(());
             },
             JumpIfZero(i) => {
                 match self.accumulator {
-                    None => panic!("cannot jump zero with nil in hand"),
+                    None => return Err(StepError::e("cannot jump zero with nil in hand")),
                     Some(v) => match v {
                         Tile::Number(v) if v == 0 => {
                             self.pc = i;
-                            return;
+                            return Ok(());
                         }
                         Tile::Number(..) |
                         Tile::Letter(..) => {}, // noop
@@ -538,11 +546,11 @@ impl Machine {
             },
             JumpIfNegative(i) => {
                 match self.accumulator {
-                    None => panic!("cannot jump neg with nil in hand"),
+                    None => return Err(StepError::e("cannot jump neg with nil in hand")),
                     Some(v) => match v {
                         Tile::Number(v) if v < 0 => {
                             self.pc = i;
-                            return;
+                            return Ok(());
                         }
                         Tile::Number(..) |
                         Tile::Letter(..) => {}, // noop
@@ -555,9 +563,19 @@ impl Machine {
         self.pc += 1;
 
         if self.pc >= self.program.0.len() {
-            println!("{:?}", self.output);
-            println!("{:?}", self.registers);
-            panic!("end of input, exit cleanly")
+            Err(StepError::EndOfProgram)
+        } else {
+            Ok(())
+        }
+    }
+
+    fn run(&mut self) -> Result<(), StepError> {
+        loop {
+            match self.step() {
+                Ok(..) => continue,
+                Err(StepError::EndOfProgram) => return Ok(()),
+                Err(e) => return Err(e),
+            }
         }
     }
 }
@@ -584,7 +602,5 @@ fn main() {
     m.set_register(23, Tile::Number(0));
     m.set_register(24, Tile::Number(10));
 
-    loop {
-        m.step();
-    }
+    println!("{:?}", m.run());
 }
