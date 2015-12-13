@@ -651,7 +651,8 @@ fn level_36() -> (Input, Registers) {
 }
 
 fn main() {
-    let mut f = File::open("36-alphabetizer-both.txt").expect("File?");
+    let fname = ::std::env::args().nth(1).expect("filename");
+    let mut f = File::open(fname).expect("File?");
 
     let mut s = String::new();
     f.read_to_string(&mut s).expect("read");
