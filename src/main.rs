@@ -17,7 +17,7 @@ fn append_string(input: &mut Input, s: &str) {
 
 fn append_zero_terminated_string(input: &mut Input, s: &str) {
     append_string(input, s);
-    input.push(Tile::Number(0));
+    input.push(Tile::num(0));
 }
 
 // Given two zero-terminated words, output the word that is first in
@@ -28,8 +28,8 @@ fn level_36() -> (Input, Registers, Output) {
     append_zero_terminated_string(&mut input, "aaa");
 
     let mut registers = BTreeMap::new();
-    registers.insert(23, Tile::Number(0));
-    registers.insert(24, Tile::Number(10));
+    registers.insert(23, Tile::num(0));
+    registers.insert(24, Tile::num(10));
 
     let mut output = Vec::new();
     append_string(&mut output, "aaa");
@@ -39,14 +39,14 @@ fn level_36() -> (Input, Registers, Output) {
 
 // Given numbers, output the digits of the numbers
 fn level_38() -> (Input, Registers, Output) {
-    let input = [33, 123, 7, 111].iter().cloned().map(Tile::Number).collect();
+    let input = [33, 505, 7, 979].iter().cloned().map(Tile::num).collect();
 
     let mut registers = BTreeMap::new();
-    registers.insert(9, Tile::Number(0));
-    registers.insert(10, Tile::Number(10));
-    registers.insert(11, Tile::Number(100));
+    registers.insert(9, Tile::num(0));
+    registers.insert(10, Tile::num(10));
+    registers.insert(11, Tile::num(100));
 
-    let output = [3, 3, 1, 2, 3, 7, 1, 1, 1].iter().cloned().map(Tile::Number).collect();
+    let output = [3, 3, 5, 0, 5, 7, 9, 7, 9].iter().cloned().map(Tile::num).collect();
 
     (input, registers, output)
 }

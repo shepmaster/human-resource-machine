@@ -73,10 +73,59 @@ impl<'a> FromIterator<Token<'a>> for Program {
     }
 }
 
+// Clamped at [-999, 999]
+#[derive(Debug, Copy, Clone, PartialEq, Eq)]
+struct NumberValue(i16);
+
+impl NumberValue {
+    fn from_char(c: char) -> Result<NumberValue, StepError> {
+        NumberValue::clamp(c as i16)
+    }
+
+    fn clamp(v: i16) -> Result<NumberValue, StepError> {
+        if v > 999 {
+            Err(StepError::Overflow)
+        } else if v < -999 {
+            Err(StepError::Underflow)
+        } else {
+            Ok(NumberValue(v))
+        }
+    }
+
+    fn add(self, other: NumberValue) -> Result<NumberValue, StepError> {
+        NumberValue::clamp(self.0 + other.0)
+    }
+
+    fn sub(self, other: NumberValue) -> Result<NumberValue, StepError> {
+        NumberValue::clamp(self.0 - other.0)
+    }
+
+    fn is_zero(self) -> bool { self.0 == 0 }
+    fn is_negative(self) -> bool { self.0 < 0 }
+
+    fn increment(self) -> Result<NumberValue, StepError> {
+        NumberValue::clamp(self.0 + 1)
+    }
+
+    fn decrement(self) -> Result<NumberValue, StepError> {
+        NumberValue::clamp(self.0 - 1)
+    }
+
+    fn into_u8(self) -> u8 {
+        self.0 as u8 // Should have error of some kind?
+    }
+}
+
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 pub enum Tile {
-    Number(i8), // what is the actual size here?
+    Number(NumberValue),
     Letter(char),
+}
+
+impl Tile {
+    pub fn num(i: i16) -> Tile {
+        Tile::Number(NumberValue::clamp(i).unwrap())
+    }
 }
 
 #[derive(Debug, Copy, Clone)]
@@ -98,6 +147,8 @@ pub enum StepError {
     SubCrossTypes,
     JumpZeroNil,
     JumpNegativeNil,
+    Underflow,
+    Overflow,
 }
 
 pub type Input = Vec<Tile>;
@@ -134,8 +185,8 @@ impl Machine {
             Register::Direct(r) => Ok(r),
             Register::Indirect(r) => match self.registers.get(&r) {
                 None => Err(StepError::IndirectThroughNil),
-                Some(&Tile::Number(v)) if v < 0 => Err(StepError::IndirectThroughNegative),
-                Some(&Tile::Number(v)) => Ok(v as u8),
+                Some(&Tile::Number(v)) if v.is_negative() => Err(StepError::IndirectThroughNegative),
+                Some(&Tile::Number(v)) => Ok(v.into_u8()), // Should have max # registers?
                 Some(&Tile::Letter(..)) => Err(StepError::IndirectThroughLetter),
             },
         }
@@ -182,7 +233,7 @@ impl Machine {
                 let v = match self.registers.get_mut(&r) {
                     None => return Err(StepError::BumpNil),
                     Some(&mut Tile::Number(ref mut v)) => {
-                        *v = *v + 1;
+                        *v = try!(v.increment());
                         *v
                     },
                     Some(&mut Tile::Letter(..)) => return Err(StepError::BumpLetter)
@@ -194,7 +245,7 @@ impl Machine {
                 let v = match self.registers.get_mut(&r) {
                     None => return Err(StepError::BumpNil),
                     Some(&mut Tile::Number(ref mut v)) => {
-                        *v = *v - 1;
+                        *v = try!(v.decrement());
                         *v
                     },
                     Some(&mut Tile::Letter(..)) => return Err(StepError::BumpLetter)
@@ -206,7 +257,7 @@ impl Machine {
                 let v = match (self.accumulator, self.registers.get(&r)) {
                     (None, _) => return Err(StepError::AddToNil),
                     (_, None) => return Err(StepError::AddWithNil),
-                    (Some(Tile::Number(a)), Some(&Tile::Number(v))) => a + v,
+                    (Some(Tile::Number(a)), Some(&Tile::Number(v))) => try!(a.add(v)),
                     _ => return Err(StepError::AddWithLetter),
                 };
                 self.accumulator = Some(Tile::Number(v));
@@ -216,8 +267,12 @@ impl Machine {
                 let v = match (self.accumulator, self.registers.get(&r)) {
                     (None, _) => return Err(StepError::SubFromNil),
                     (_, None) => return Err(StepError::SubWithNil),
-                    (Some(Tile::Number(a)), Some(&Tile::Number(v))) => a - v,
-                    (Some(Tile::Letter(a)), Some(&Tile::Letter(v))) => a as i8 - v as i8,
+                    (Some(Tile::Number(a)), Some(&Tile::Number(v))) => try!(a.sub(v)),
+                    (Some(Tile::Letter(a)), Some(&Tile::Letter(v))) => {
+                        let a = try!(NumberValue::from_char(a));
+                        let v = try!(NumberValue::from_char(v));
+                        try!(a.sub(v))
+                    },
                     _ => return Err(StepError::SubCrossTypes),
                 };
                 self.accumulator = Some(Tile::Number(v))
@@ -230,7 +285,7 @@ impl Machine {
                 match self.accumulator {
                     None => return Err(StepError::JumpZeroNil),
                     Some(v) => match v {
-                        Tile::Number(v) if v == 0 => {
+                        Tile::Number(v) if v.is_zero() => {
                             self.pc = i;
                             return Ok(());
                         }
@@ -243,7 +298,7 @@ impl Machine {
                 match self.accumulator {
                     None => return Err(StepError::JumpNegativeNil),
                     Some(v) => match v {
-                        Tile::Number(v) if v < 0 => {
+                        Tile::Number(v) if v.is_negative() => {
                             self.pc = i;
                             return Ok(());
                         }
