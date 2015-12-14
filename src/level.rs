@@ -15,6 +15,17 @@ pub fn level_1() -> Level {
     (input, registers, output)
 }
 
+// Copy long inbox to outbox
+pub fn level_2() -> Level {
+    let input = from_string("initialize");
+
+    let registers = BTreeMap::new();
+
+    let output = input.clone();
+
+    (input, registers, output)
+}
+
 // Copy inbox to outbox, losing duplicates
 pub fn level_35() -> Level {
     let input = from_string("eabedebaeb");
