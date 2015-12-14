@@ -1,5 +1,7 @@
 use peresil::{ParseMaster, StringPoint, Progress, Status, Recoverable};
 
+use super::Register;
+
 #[derive(Debug, Copy, Clone)]
 pub enum Error {
     ExpectedHeader,
@@ -50,12 +52,6 @@ impl<'a> Parser<'a> {
             point: StringPoint::new(s),
         }
     }
-}
-
-#[derive(Debug, Copy, Clone)]
-pub enum Register {
-    Direct(u8),
-    Indirect(u8),
 }
 
 pub type Label<'a> = &'a str;

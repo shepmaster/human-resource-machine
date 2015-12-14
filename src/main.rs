@@ -2,6 +2,7 @@
 extern crate peresil;
 
 mod parser;
+mod compiler;
 mod machine;
 
 use std::fs::File;
@@ -9,7 +10,14 @@ use std::io::prelude::*;
 use std::collections::BTreeMap;
 
 use parser::Parser;
+use compiler::Program;
 use machine::{Input, Output, Registers, Tile, Machine};
+
+#[derive(Debug, Copy, Clone)]
+pub enum Register {
+    Direct(u8),
+    Indirect(u8),
+}
 
 fn append_string(input: &mut Input, s: &str) {
     input.extend(s.chars().map(Tile::Letter));
@@ -116,7 +124,7 @@ fn main() {
 
     let t = Parser::new(&s);
 
-    let p = match t.collect() {
+    let p: Program = match t.collect() {
         Ok(p) => p,
         Err((offset, errors)) => {
             report_parsing_error(&s, offset, &errors);

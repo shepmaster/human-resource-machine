@@ -1,12 +1,11 @@
-use std::iter::FromIterator;
 use std::collections::BTreeMap;
 
-use super::parser::{Token, Register};
+use super::Register;
 
 type AbsoluteIndex = usize;
 
 #[derive(Debug, Copy, Clone)]
-enum Instruction {
+pub enum Instruction {
     Inbox,
     Outbox,
     CopyFrom(Register),
@@ -19,58 +18,6 @@ enum Instruction {
     JumpIfZero(AbsoluteIndex),
     JumpIfNegative(AbsoluteIndex),
     NoOp,
-}
-
-#[derive(Debug, Clone)]
-pub struct Program(Vec<Instruction>);
-
-impl<'a> FromIterator<Token<'a>> for Program {
-    fn from_iter<T>(iterator: T) -> Self
-        where T: IntoIterator<Item = Token<'a>>
-    {
-        // Remove values that don't change the behavior
-        let without_junk: Vec<_> = iterator.into_iter().filter(|t| match *t {
-            Token::Header |
-            Token::Comment(..) |
-            Token::CommentDefinition(..) |
-            Token::Whitespace(..) => false,
-            _ => true,
-        }).collect();
-
-        // Find all the indexes of the labels
-        let label_mapping = {
-            let mut map = BTreeMap::new();
-
-            for (i, t) in without_junk.iter().enumerate() {
-                if let Token::LabelDefinition(id) = *t {
-                    map.insert(id, i);
-                }
-            }
-
-            map
-        };
-
-        let unmap = |id| *label_mapping.get(id).expect("Label is not defined");
-
-        // Make the instructions, resolving jump locations
-        let i = without_junk.into_iter().map(|t| match t {
-            Token::Inbox => Instruction::Inbox,
-            Token::Outbox => Instruction::Outbox,
-            Token::CopyFrom(r) => Instruction::CopyFrom(r),
-            Token::CopyTo(r) => Instruction::CopyTo(r),
-            Token::BumpUp(r) => Instruction::BumpUp(r),
-            Token::BumpDown(r) => Instruction::BumpDown(r),
-            Token::Add(r) => Instruction::Add(r),
-            Token::Sub(r) => Instruction::Sub(r),
-            Token::LabelDefinition(..) => Instruction::NoOp,
-            Token::Jump(id) => Instruction::Jump(unmap(id)),
-            Token::JumpIfZero(id) => Instruction::JumpIfZero(unmap(id)),
-            Token::JumpIfNegative(id) => Instruction::JumpIfNegative(unmap(id)),
-            _ => unreachable!(),
-        });
-
-        Program(i.collect())
-    }
 }
 
 // Clamped at [-999, 999]
@@ -157,7 +104,7 @@ pub type Registers = BTreeMap<u8, Tile>;
 
 #[derive(Debug, Clone)]
 pub struct Machine {
-    program: Program,
+    program: Vec<Instruction>,
     input: Input,
     output: Output,
     pc: usize,
@@ -166,12 +113,14 @@ pub struct Machine {
 }
 
 impl Machine {
-    pub fn new(program: Program, mut input: Input, registers: Registers) -> Machine {
+    pub fn new<I>(program: I, mut input: Input, registers: Registers) -> Machine
+        where I: IntoIterator<Item = Instruction>
+    {
         // We want to pop off the front, so flip it around for efficiency.
         input.reverse();
 
         Machine {
-            program: program,
+            program: program.into_iter().collect(),
             input: input,
             output: Vec::new(),
             pc: 0,
@@ -198,10 +147,10 @@ impl Machine {
         use self::Instruction::*;
 
         // println!("PC: {}", self.pc);
-        // println!("Instr: {:?}", self.program.0[self.pc]);
+        // println!("Instr: {:?}", self.program[self.pc]);
         // println!("Acc: {:?}", self.accumulator);
 
-        match self.program.0[self.pc] {
+        match self.program[self.pc] {
             Inbox => {
                 match self.input.pop() {
                     Some(v) => self.accumulator = Some(v),
@@ -312,7 +261,7 @@ impl Machine {
 
         self.pc += 1;
 
-        if self.pc >= self.program.0.len() {
+        if self.pc >= self.program.len() {
             Err(StepError::EndOfProgram)
         } else {
             Ok(())
