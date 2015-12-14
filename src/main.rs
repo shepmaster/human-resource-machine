@@ -81,6 +81,7 @@ fn main() {
         1 => level::level_1(),
         2 => level::level_2(),
         3 => level::level_3(),
+        4 => level::level_4(),
         35 => level::level_35(),
         36 => level::level_36(),
         37 => level::level_37(),

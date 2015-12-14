@@ -40,6 +40,17 @@ pub fn level_3() -> Level {
     (input, registers, output)
 }
 
+// Swap pairs from the input
+pub fn level_4() -> Level {
+    let input = parse_mixed("6,4,-1,7,ih");
+
+    let registers = BTreeMap::new();
+
+    let output = parse_mixed("4,6,7,-1,hi");
+
+    (input, registers, output)
+}
+
 // Copy inbox to outbox, losing duplicates
 pub fn level_35() -> Level {
     let input = from_string("eabedebaeb");
@@ -105,6 +116,19 @@ pub fn level_38() -> Level {
     let output = from_numbers(&[3, 3, 5, 0, 5, 7, 9, 7, 9]);
 
     (input, registers, output)
+}
+
+fn parse_mixed(s: &str) -> Input {
+    let mut input = Vec::new();
+
+    for part in s.split(",") {
+        match part.parse() {
+            Ok(n) => input.push(Tile::num(n)),
+            Err(..) => append_string(&mut input, part),
+        }
+    }
+
+    input
 }
 
 fn from_numbers(n: &[i16]) -> Input {
