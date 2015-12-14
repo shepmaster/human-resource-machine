@@ -1,5 +1,7 @@
 #[macro_use]
 extern crate peresil;
+extern crate rustc_serialize;
+extern crate docopt;
 
 mod parser;
 mod compiler;
@@ -12,6 +14,8 @@ use std::collections::BTreeMap;
 use parser::Parser;
 use compiler::Program;
 use machine::{Input, Output, Registers, Tile, Machine};
+
+use docopt::Docopt;
 
 #[derive(Debug, Copy, Clone)]
 pub enum Register {
@@ -114,13 +118,28 @@ fn report_parsing_error(s: &str, offset: usize, errors: &[parser::Error]) {
     println!("{:?}", errors);
 }
 
+const USAGE: &'static str = "
+Human Resource Machine simulator.
+
+Usage:
+  human-resource-machine <level> <file>
+";
+
+#[derive(Debug, Clone, RustcDecodable)]
+struct Args {
+    arg_level: usize,
+    arg_file: String,
+}
+
 fn main() {
-    let level = ::std::env::args().nth(1).expect("level").parse().expect("level number");
-    let fname = ::std::env::args().nth(2).expect("filename");
-    let mut f = File::open(fname).expect("File?");
+    let args: Args = Docopt::new(USAGE)
+        .and_then(|d| d.decode())
+        .unwrap_or_else(|e| e.exit());
+
+    let mut f = File::open(args.arg_file).expect("Could not open source file");
 
     let mut s = String::new();
-    f.read_to_string(&mut s).expect("read");
+    f.read_to_string(&mut s).expect("Could not read source file");
 
     let t = Parser::new(&s);
 
@@ -136,12 +155,12 @@ fn main() {
         },
     };
 
-    let (input, registers, output) = match level {
+    let (input, registers, output) = match args.arg_level {
         35 => level_35(),
         36 => level_36(),
         37 => level_37(),
         38 => level_38(),
-        _ => panic!("Unknown level {}", level),
+        _ => panic!("Unknown level {}", args.arg_level),
     };
     let mut m = Machine::new(p, input, registers);
 

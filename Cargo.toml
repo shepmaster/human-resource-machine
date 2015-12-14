@@ -13,3 +13,5 @@ license = "MIT"
 
 [dependencies]
 peresil = "*"
+docopt = "*"
+rustc-serialize = "*"
