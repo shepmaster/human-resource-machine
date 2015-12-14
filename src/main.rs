@@ -37,6 +37,29 @@ fn level_36() -> (Input, Registers, Output) {
     (input, registers, output)
 }
 
+fn level_37() -> (Input, Registers, Output) {
+    let input = [0, 23].iter().cloned().map(Tile::num).collect();
+
+    let mut registers = BTreeMap::new();
+    let z = [
+        (0, 'e', 13),
+        (3, 'c', 23),
+        (10, 'p', 20),
+        (13, 's', 3),
+        (20, 'e', -1),
+        (23, 'a', 10),
+    ];
+    for &(idx, c, v) in &z {
+        registers.insert(idx, Tile::Letter(c));
+        registers.insert(idx + 1, Tile::num(v));
+    }
+
+    let mut output = Vec::new();
+    append_string(&mut output, "escapeape");
+
+    (input, registers, output)
+}
+
 // Given numbers, output the digits of the numbers
 fn level_38() -> (Input, Registers, Output) {
     let input = [33, 505, 7, 979].iter().cloned().map(Tile::num).collect();
@@ -87,6 +110,7 @@ fn main() {
 
     let (input, registers, output) = match level {
         36 => level_36(),
+        37 => level_37(),
         38 => level_38(),
         _ => panic!("Unknown level {}", level),
     };
