@@ -94,7 +94,7 @@ fn report_parsing_error(s: &str, offset: usize, errors: &[parser::Error]) {
     let upto = &s[..offset];
     let leading_nl = upto.rfind("\n").map(|x| x + 1).unwrap_or(0);
     let after = &s[offset..];
-    let trailing_nl = after.find("\n").map(|x| x - 1).unwrap_or(after.len()) + offset;
+    let trailing_nl = after.find("\n").unwrap_or(after.len()) + offset;
 
     let line = &s[leading_nl..trailing_nl];
     let inner_offset = offset - leading_nl;
