@@ -78,6 +78,7 @@ fn main() {
     let program_length = p.stats_len();
 
     let (input, registers, output) = match args.arg_level {
+        1 => level::level_1(),
         35 => level::level_35(),
         36 => level::level_36(),
         37 => level::level_37(),
