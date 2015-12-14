@@ -26,6 +26,20 @@ pub fn level_2() -> Level {
     (input, registers, output)
 }
 
+// Copy from tiles to outbox
+pub fn level_3() -> Level {
+    let input = from_numbers(&[-99, -99, -99, -99]);
+
+    let mut registers = BTreeMap::new();
+    for (i, c) in "ujxgbe".chars().enumerate() {
+        registers.insert(i as u8, Tile::Letter(c));
+    }
+
+    let output = from_string("bug");
+
+    (input, registers, output)
+}
+
 // Copy inbox to outbox, losing duplicates
 pub fn level_35() -> Level {
     let input = from_string("eabedebaeb");
