@@ -3,5 +3,13 @@ name = "human-resource-machine"
 version = "0.1.0"
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 
+description = "A parser and interpreter for Human Resource Machine files"
+readme = "README.md"
+
+homepage = "https://github.com/shepmaster/human-resource-machine"
+repository = "https://github.com/shepmaster/human-resource-machine"
+
+license = "MIT"
+
 [dependencies]
 peresil = "*"
