@@ -65,6 +65,9 @@ fn level_36() -> Level {
     (input, registers, output)
 }
 
+// There are pairs of letters and next pointers in the registers,
+// starting at the input, follow the chain of registers until you get
+// to -1. Output each letter on the way.
 fn level_37() -> Level {
     let input = [0, 23].iter().cloned().map(Tile::num).collect();
 
