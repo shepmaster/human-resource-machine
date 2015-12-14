@@ -157,6 +157,7 @@ fn main() {
             return;
         },
     };
+    let program_length = p.stats_len();
 
     let (input, registers, output) = match args.arg_level {
         35 => level_35(),
@@ -172,8 +173,13 @@ fn main() {
             let actual_output = m.output();
             println!("Program completed");
             if actual_output == &output {
+                let stats = m.stats();
+
                 println!("Output matched!");
-                println!("{:?}", m.stats());
+                println!("==========");
+                println!("Instructions {}", program_length);
+                println!("Runtime      {}", stats.runtime);
+                println!("Memory Usage {}", stats.memory_usage);
             } else {
                 println!("Output did not match");
                 println!("Expected: {:?}", output);

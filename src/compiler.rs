@@ -72,6 +72,10 @@ impl Program {
         let instrs = try!(i.collect::<Result<_, Error<E>>>());
         Ok(Program(instrs))
     }
+
+    pub fn stats_len(&self) -> usize {
+        self.0.iter().filter(|i| i.counts_towards_stats()).count()
+    }
 }
 
 impl IntoIterator for Program {

@@ -21,7 +21,7 @@ pub enum Instruction {
 }
 
 impl Instruction {
-    fn counts_towards_stats(&self) -> bool {
+    pub fn counts_towards_stats(&self) -> bool {
         if let Instruction::NoOp = *self { false }
         else { true }
     }
