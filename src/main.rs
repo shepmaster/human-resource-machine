@@ -20,9 +20,25 @@ fn append_zero_terminated_string(input: &mut Input, s: &str) {
     input.push(Tile::num(0));
 }
 
+type Level = (Input, Registers, Output);
+
+// Copy inbox to outbox, losing duplicates
+fn level_35() -> Level {
+    let mut input = Vec::new();
+    append_string(&mut input, "eabedebaeb");
+
+    let mut registers = BTreeMap::new();
+    registers.insert(14, Tile::num(0));
+
+    let mut output = Vec::new();
+    append_string(&mut output, "eabd");
+
+    (input, registers, output)
+}
+
 // Given two zero-terminated words, output the word that is first in
 // alphabetical order
-fn level_36() -> (Input, Registers, Output) {
+fn level_36() -> Level {
     let mut input = Vec::new();
     append_zero_terminated_string(&mut input, "aab");
     append_zero_terminated_string(&mut input, "aaa");
@@ -37,7 +53,7 @@ fn level_36() -> (Input, Registers, Output) {
     (input, registers, output)
 }
 
-fn level_37() -> (Input, Registers, Output) {
+fn level_37() -> Level {
     let input = [0, 23].iter().cloned().map(Tile::num).collect();
 
     let mut registers = BTreeMap::new();
@@ -61,7 +77,7 @@ fn level_37() -> (Input, Registers, Output) {
 }
 
 // Given numbers, output the digits of the numbers
-fn level_38() -> (Input, Registers, Output) {
+fn level_38() -> Level {
     let input = [33, 505, 7, 979].iter().cloned().map(Tile::num).collect();
 
     let mut registers = BTreeMap::new();
@@ -109,6 +125,7 @@ fn main() {
     };
 
     let (input, registers, output) = match level {
+        35 => level_35(),
         36 => level_36(),
         37 => level_37(),
         38 => level_38(),
