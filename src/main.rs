@@ -124,10 +124,14 @@ fn main() {
 
     let t = Parser::new(&s);
 
-    let p: Program = match t.collect() {
+    let p = match Program::compile(t) {
         Ok(p) => p,
-        Err((offset, errors)) => {
+        Err(compiler::Error::ParserError((offset, errors))) => {
             report_parsing_error(&s, offset, &errors);
+            return;
+        },
+        Err(e) =>  {
+            println!("Error occurred while compiling: {:?}", e);
             return;
         },
     };
