@@ -25,36 +25,36 @@ pub enum Instruction {
 struct NumberValue(i16);
 
 impl NumberValue {
-    fn from_char(c: char) -> Result<NumberValue, StepError> {
+    fn from_char(c: char) -> Result<NumberValue, Error> {
         NumberValue::clamp(c as i16)
     }
 
-    fn clamp(v: i16) -> Result<NumberValue, StepError> {
+    fn clamp(v: i16) -> Result<NumberValue, Error> {
         if v > 999 {
-            Err(StepError::Overflow)
+            Err(Error::Overflow)
         } else if v < -999 {
-            Err(StepError::Underflow)
+            Err(Error::Underflow)
         } else {
             Ok(NumberValue(v))
         }
     }
 
-    fn add(self, other: NumberValue) -> Result<NumberValue, StepError> {
+    fn add(self, other: NumberValue) -> Result<NumberValue, Error> {
         NumberValue::clamp(self.0 + other.0)
     }
 
-    fn sub(self, other: NumberValue) -> Result<NumberValue, StepError> {
+    fn sub(self, other: NumberValue) -> Result<NumberValue, Error> {
         NumberValue::clamp(self.0 - other.0)
     }
 
     fn is_zero(self) -> bool { self.0 == 0 }
     fn is_negative(self) -> bool { self.0 < 0 }
 
-    fn increment(self) -> Result<NumberValue, StepError> {
+    fn increment(self) -> Result<NumberValue, Error> {
         NumberValue::clamp(self.0 + 1)
     }
 
-    fn decrement(self) -> Result<NumberValue, StepError> {
+    fn decrement(self) -> Result<NumberValue, Error> {
         NumberValue::clamp(self.0 - 1)
     }
 
@@ -76,7 +76,7 @@ impl Tile {
 }
 
 #[derive(Debug, Copy, Clone)]
-pub enum StepError {
+pub enum Error {
     EndOfProgram,
     IndirectThroughNil,
     IndirectThroughNegative,
@@ -129,21 +129,21 @@ impl Machine {
         }
     }
 
-    fn deref_target(&self, r: Register) -> Result<u8, StepError> {
+    fn deref_target(&self, r: Register) -> Result<u8, Error> {
         match r {
             Register::Direct(r) => Ok(r),
             Register::Indirect(r) => match self.registers.get(&r) {
-                None => Err(StepError::IndirectThroughNil),
-                Some(&Tile::Number(v)) if v.is_negative() => Err(StepError::IndirectThroughNegative),
+                None => Err(Error::IndirectThroughNil),
+                Some(&Tile::Number(v)) if v.is_negative() => Err(Error::IndirectThroughNegative),
                 Some(&Tile::Number(v)) => Ok(v.into_u8()), // Should have max # registers?
-                Some(&Tile::Letter(..)) => Err(StepError::IndirectThroughLetter),
+                Some(&Tile::Letter(..)) => Err(Error::IndirectThroughLetter),
             },
         }
     }
 
     pub fn into_output(self) -> Output { self.output }
 
-    pub fn step(&mut self) -> Result<(), StepError> {
+    pub fn step(&mut self) -> Result<(), Error> {
         use self::Instruction::*;
 
         // println!("PC: {}", self.pc);
@@ -154,18 +154,18 @@ impl Machine {
             Inbox => {
                 match self.input.pop() {
                     Some(v) => self.accumulator = Some(v),
-                    None => return Err(StepError::EndOfProgram),
+                    None => return Err(Error::EndOfProgram),
                 }
             },
             Outbox => {
                 match self.accumulator {
                     Some(v) => self.output.push(v),
-                    None => return Err(StepError::OutputNil),
+                    None => return Err(Error::OutputNil),
                 }
             },
             CopyFrom(r) => {
                 let r = try!(self.deref_target(r));
-                let v = try!(self.registers.get(&r).ok_or(StepError::CopyFromNil));
+                let v = try!(self.registers.get(&r).ok_or(Error::CopyFromNil));
                 self.accumulator = Some(*v);
             },
             CopyTo(r) => {
@@ -174,55 +174,55 @@ impl Machine {
                         let r = try!(self.deref_target(r));
                         self.registers.insert(r, v);
                     },
-                    None => return Err(StepError::CopyToNil),
+                    None => return Err(Error::CopyToNil),
                 }
             },
             BumpUp(r) => {
                 let r = try!(self.deref_target(r));
                 let v = match self.registers.get_mut(&r) {
-                    None => return Err(StepError::BumpNil),
+                    None => return Err(Error::BumpNil),
                     Some(&mut Tile::Number(ref mut v)) => {
                         *v = try!(v.increment());
                         *v
                     },
-                    Some(&mut Tile::Letter(..)) => return Err(StepError::BumpLetter)
+                    Some(&mut Tile::Letter(..)) => return Err(Error::BumpLetter)
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
             BumpDown(r) => {
                 let r = try!(self.deref_target(r));
                 let v = match self.registers.get_mut(&r) {
-                    None => return Err(StepError::BumpNil),
+                    None => return Err(Error::BumpNil),
                     Some(&mut Tile::Number(ref mut v)) => {
                         *v = try!(v.decrement());
                         *v
                     },
-                    Some(&mut Tile::Letter(..)) => return Err(StepError::BumpLetter)
+                    Some(&mut Tile::Letter(..)) => return Err(Error::BumpLetter)
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
             Add(r) => {
                 let r = try!(self.deref_target(r));
                 let v = match (self.accumulator, self.registers.get(&r)) {
-                    (None, _) => return Err(StepError::AddToNil),
-                    (_, None) => return Err(StepError::AddWithNil),
+                    (None, _) => return Err(Error::AddToNil),
+                    (_, None) => return Err(Error::AddWithNil),
                     (Some(Tile::Number(a)), Some(&Tile::Number(v))) => try!(a.add(v)),
-                    _ => return Err(StepError::AddWithLetter),
+                    _ => return Err(Error::AddWithLetter),
                 };
                 self.accumulator = Some(Tile::Number(v));
             },
             Sub(r) => {
                 let r = try!(self.deref_target(r));
                 let v = match (self.accumulator, self.registers.get(&r)) {
-                    (None, _) => return Err(StepError::SubFromNil),
-                    (_, None) => return Err(StepError::SubWithNil),
+                    (None, _) => return Err(Error::SubFromNil),
+                    (_, None) => return Err(Error::SubWithNil),
                     (Some(Tile::Number(a)), Some(&Tile::Number(v))) => try!(a.sub(v)),
                     (Some(Tile::Letter(a)), Some(&Tile::Letter(v))) => {
                         let a = try!(NumberValue::from_char(a));
                         let v = try!(NumberValue::from_char(v));
                         try!(a.sub(v))
                     },
-                    _ => return Err(StepError::SubCrossTypes),
+                    _ => return Err(Error::SubCrossTypes),
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
@@ -232,7 +232,7 @@ impl Machine {
             },
             JumpIfZero(i) => {
                 match self.accumulator {
-                    None => return Err(StepError::JumpZeroNil),
+                    None => return Err(Error::JumpZeroNil),
                     Some(v) => match v {
                         Tile::Number(v) if v.is_zero() => {
                             self.pc = i;
@@ -245,7 +245,7 @@ impl Machine {
             },
             JumpIfNegative(i) => {
                 match self.accumulator {
-                    None => return Err(StepError::JumpNegativeNil),
+                    None => return Err(Error::JumpNegativeNil),
                     Some(v) => match v {
                         Tile::Number(v) if v.is_negative() => {
                             self.pc = i;
@@ -262,17 +262,17 @@ impl Machine {
         self.pc += 1;
 
         if self.pc >= self.program.len() {
-            Err(StepError::EndOfProgram)
+            Err(Error::EndOfProgram)
         } else {
             Ok(())
         }
     }
 
-    pub fn run(&mut self) -> Result<(), StepError> {
+    pub fn run(&mut self) -> Result<(), Error> {
         loop {
             match self.step() {
                 Ok(..) => continue,
-                Err(StepError::EndOfProgram) => return Ok(()),
+                Err(Error::EndOfProgram) => return Ok(()),
                 Err(e) => return Err(e),
             }
         }
