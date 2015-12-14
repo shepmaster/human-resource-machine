@@ -20,6 +20,13 @@ pub enum Instruction {
     NoOp,
 }
 
+impl Instruction {
+    fn counts_towards_stats(&self) -> bool {
+        if let Instruction::NoOp = *self { false }
+        else { true }
+    }
+}
+
 // Clamped at [-999, 999]
 #[derive(Debug, Copy, Clone, PartialEq, Eq)]
 struct NumberValue(i16);
@@ -102,6 +109,12 @@ pub type Input = Vec<Tile>;
 pub type Output = Vec<Tile>;
 pub type Registers = BTreeMap<u8, Tile>;
 
+#[derive(Debug, Copy, Clone)]
+pub struct Stats {
+    pub runtime: usize,
+    pub memory_usage: usize,
+}
+
 #[derive(Debug, Clone)]
 pub struct Machine {
     program: Vec<Instruction>,
@@ -110,6 +123,7 @@ pub struct Machine {
     pc: usize,
     accumulator: Option<Tile>,
     registers: Registers,
+    runtime: usize,
 }
 
 impl Machine {
@@ -126,6 +140,7 @@ impl Machine {
             pc: 0,
             accumulator: None,
             registers: registers,
+            runtime: 0,
         }
     }
 
@@ -141,16 +156,32 @@ impl Machine {
         }
     }
 
-    pub fn into_output(self) -> Output { self.output }
+    pub fn stats(&self) -> Stats {
+        Stats {
+            memory_usage: self.registers.len(),
+            runtime: self.runtime,
+        }
+    }
+
+    pub fn output(&self) -> &Output {
+        &self.output
+    }
 
     pub fn step(&mut self) -> Result<(), Error> {
         use self::Instruction::*;
+
+        if self.pc >= self.program.len() {
+            return Err(Error::EndOfProgram);
+        }
 
         // println!("PC: {}", self.pc);
         // println!("Instr: {:?}", self.program[self.pc]);
         // println!("Acc: {:?}", self.accumulator);
 
-        match self.program[self.pc] {
+        let instruction = self.program[self.pc];
+        self.pc += 1;
+
+        match instruction {
             Inbox => {
                 match self.input.pop() {
                     Some(v) => self.accumulator = Some(v),
@@ -226,18 +257,12 @@ impl Machine {
                 };
                 self.accumulator = Some(Tile::Number(v))
             },
-            Jump(i) => {
-                self.pc = i;
-                return Ok(());
-            },
+            Jump(i) => self.pc = i,
             JumpIfZero(i) => {
                 match self.accumulator {
                     None => return Err(Error::JumpZeroNil),
                     Some(v) => match v {
-                        Tile::Number(v) if v.is_zero() => {
-                            self.pc = i;
-                            return Ok(());
-                        }
+                        Tile::Number(v) if v.is_zero() => self.pc = i,
                         Tile::Number(..) |
                         Tile::Letter(..) => {}, // noop
                     }
@@ -247,10 +272,7 @@ impl Machine {
                 match self.accumulator {
                     None => return Err(Error::JumpNegativeNil),
                     Some(v) => match v {
-                        Tile::Number(v) if v.is_negative() => {
-                            self.pc = i;
-                            return Ok(());
-                        }
+                        Tile::Number(v) if v.is_negative() => self.pc = i,
                         Tile::Number(..) |
                         Tile::Letter(..) => {}, // noop
                     }
@@ -259,13 +281,11 @@ impl Machine {
             NoOp => {},
         }
 
-        self.pc += 1;
-
-        if self.pc >= self.program.len() {
-            Err(Error::EndOfProgram)
-        } else {
-            Ok(())
+        if instruction.counts_towards_stats() {
+            self.runtime += 1;
         }
+
+        Ok(())
     }
 
     pub fn run(&mut self) -> Result<(), Error> {

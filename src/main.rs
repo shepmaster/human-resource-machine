@@ -169,10 +169,11 @@ fn main() {
 
     match m.run() {
         Ok(..) => {
-            let actual_output = m.into_output();
+            let actual_output = m.output();
             println!("Program completed");
-            if actual_output == output {
+            if actual_output == &output {
                 println!("Output matched!");
+                println!("{:?}", m.stats());
             } else {
                 println!("Output did not match");
                 println!("Expected: {:?}", output);
