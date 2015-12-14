@@ -1,5 +1,5 @@
 [package]
-name = "hrm"
+name = "human-resource-machine"
 version = "0.1.0"
 authors = ["Jake Goulding <jake.goulding@gmail.com>"]
 
